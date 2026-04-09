@@ -84,3 +84,5 @@ npm run build
 ├── vite.config.js        # Vite 构建配置
 └── package.json
 ```
+## 截图
+<img width="1914" height="3584" alt="Image" src="https://github.com/user-attachments/assets/41907dab-bb48-4f4d-b12b-42aa8ce52c1f" />
