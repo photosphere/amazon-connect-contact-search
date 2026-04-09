@@ -1,0 +1,173 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Amazon Connect Contact 详情查询</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; background: #0f1117; color: #e2e8f0; min-height: 100vh; padding: 24px; }
+    header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 24px; flex-wrap: wrap; gap: 12px; }
+    header h1 { font-size: 1.4rem; font-weight: 600; color: #fff; }
+    .status-bar { display: flex; align-items: center; gap: 16px; font-size: 0.85rem; color: #94a3b8; }
+    .status-dot { width: 8px; height: 8px; border-radius: 50%; background: #64748b; display: inline-block; margin-right: 6px; }
+    .status-dot.ok { background: #22c55e; animation: pulse 2s infinite; }
+    .status-dot.error { background: #ef4444; animation: none; }
+    .status-dot.loading { background: #f59e0b; animation: pulse 1s infinite; }
+    @keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.4; } }
+
+    .credential-section { background: #1e2130; border: 1px solid #2d3348; border-radius: 10px; margin-bottom: 24px; overflow: hidden; }
+    .credential-toggle { width: 100%; background: #252a3d; border: none; color: #94a3b8; padding: 12px 20px; text-align: left; cursor: pointer; font-size: 0.85rem; display: flex; align-items: center; justify-content: space-between; transition: background 0.2s; }
+    .credential-toggle:hover { background: #2d3348; }
+    .credential-toggle .toggle-icon { transition: transform 0.25s; font-size: 0.75rem; }
+    .credential-toggle.open .toggle-icon { transform: rotate(180deg); }
+    .credential-body { display: none; padding: 20px; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 14px; }
+    .credential-body.open { display: grid; }
+    .credential-body label, .search-panel label { display: block; font-size: 0.78rem; color: #94a3b8; margin-bottom: 6px; text-transform: uppercase; letter-spacing: 0.05em; }
+    .credential-body input, .search-panel input { width: 100%; background: #0f1117; border: 1px solid #2d3348; border-radius: 6px; padding: 8px 12px; color: #e2e8f0; font-size: 0.9rem; outline: none; transition: border-color 0.2s; }
+    .credential-body input:focus, .search-panel input:focus { border-color: #6366f1; }
+    .search-panel { background: #1e2130; border: 1px solid #2d3348; border-radius: 10px; padding: 20px; margin-bottom: 24px; display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 14px; }
+    .btn-row { display: flex; align-items: flex-end; gap: 10px; }
+    .btn { padding: 9px 20px; border-radius: 6px; border: none; cursor: pointer; font-size: 0.9rem; font-weight: 500; transition: opacity 0.2s; }
+    .btn:hover { opacity: 0.85; }
+    .btn-primary { background: #6366f1; color: #fff; }
+    .btn-danger { background: #ef4444; color: #fff; }
+    .spinner { display: inline-block; width: 20px; height: 20px; border: 2px solid #2d3348; border-top-color: #6366f1; border-radius: 50%; animation: spin 0.8s linear infinite; vertical-align: middle; margin-right: 8px; }
+    @keyframes spin { to { transform: rotate(360deg); } }
+    .empty-state { text-align: center; padding: 60px 20px; color: #475569; }
+    .error-state { text-align: center; padding: 30px 20px; color: #ef4444; background: rgba(239,68,68,0.08); border: 1px solid rgba(239,68,68,0.2); border-radius: 10px; margin-bottom: 24px; word-break: break-all; }
+    .detail-panel { background: #1e2130; border: 1px solid #2d3348; border-radius: 10px; margin-bottom: 24px; overflow: hidden; }
+    .panel-header { background: #252a3d; padding: 12px 18px; font-size: 0.9rem; font-weight: 600; display: flex; align-items: center; gap: 8px; }
+    .panel-body { padding: 20px; }
+    .detail-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 16px; }
+    .detail-item { background: #0f1117; border: 1px solid #2d3348; border-radius: 8px; padding: 14px; }
+    .detail-item .label { font-size: 0.72rem; color: #64748b; text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 6px; }
+    .detail-item .value { font-size: 0.9rem; color: #e2e8f0; word-break: break-all; }
+    .detail-item .value.highlight { color: #6366f1; font-weight: 600; }
+    .detail-item .value.warn { color: #f59e0b; }
+    .detail-item .value.success { color: #22c55e; }
+    .detail-item .value.error { color: #ef4444; }
+    .transcript-container { max-height: 600px; overflow-y: auto; padding: 16px; }
+    .transcript-container::-webkit-scrollbar { width: 6px; }
+    .transcript-container::-webkit-scrollbar-track { background: #1e2130; }
+    .transcript-container::-webkit-scrollbar-thumb { background: #3d4460; border-radius: 3px; }
+    .transcript-container::-webkit-scrollbar-thumb:hover { background: #6366f1; }
+    .chat-message { margin-bottom: 16px; display: flex; flex-direction: column; }
+    .chat-message.customer { align-items: flex-start; }
+    .chat-message.agent { align-items: flex-end; }
+    .chat-message.system { align-items: center; }
+    .chat-bubble { max-width: 70%; padding: 10px 16px; border-radius: 12px; font-size: 0.88rem; line-height: 1.5; }
+    .chat-message.customer .chat-bubble { background: #2d3348; border-bottom-left-radius: 4px; }
+    .chat-message.agent .chat-bubble { background: #3730a3; border-bottom-right-radius: 4px; }
+    .chat-message.system .chat-bubble { background: rgba(245,158,11,0.12); color: #f59e0b; font-size: 0.8rem; border-radius: 6px; }
+    .chat-meta { font-size: 0.72rem; color: #64748b; margin-top: 4px; padding: 0 4px; }
+    .attachment-item { margin: 4px 0; }
+    .attachment-image { max-width: 100%; max-height: 300px; border-radius: 8px; cursor: pointer; transition: opacity 0.2s; display: block; }
+    .attachment-image:hover { opacity: 0.85; }
+    .attachment-name { font-size: 0.72rem; color: #64748b; margin-top: 4px; }
+    .attachment-link { color: #818cf8; text-decoration: none; font-size: 0.85rem; }
+    .attachment-link:hover { text-decoration: underline; }
+    .attachment-unavailable { color: #64748b; font-size: 0.82rem; }
+    .voice-segment { padding: 12px 16px; border-bottom: 1px solid #1a1d2e; display: flex; gap: 12px; align-items: flex-start; }
+    .voice-segment:last-child { border-bottom: none; }
+    .voice-segment .speaker { font-size: 0.78rem; font-weight: 600; min-width: 80px; flex-shrink: 0; padding-top: 2px; }
+    .voice-segment .speaker.customer { color: #38bdf8; }
+    .voice-segment .speaker.agent { color: #a78bfa; }
+    .voice-segment .speaker.system { color: #f59e0b; }
+    .voice-segment .text { font-size: 0.88rem; line-height: 1.6; color: #cbd5e1; }
+    .voice-segment .timestamp { font-size: 0.72rem; color: #475569; min-width: 60px; flex-shrink: 0; text-align: right; }
+    .badge { display: inline-block; padding: 2px 10px; border-radius: 12px; font-size: 0.78rem; font-weight: 500; }
+    .badge.voice { background: rgba(99,102,241,0.15); color: #818cf8; }
+    .badge.chat { background: rgba(34,197,94,0.15); color: #22c55e; }
+    .badge.task { background: rgba(245,158,11,0.15); color: #f59e0b; }
+    .badge.email { background: rgba(236,72,153,0.15); color: #f472b6; }
+    .tab-bar { display: flex; gap: 0; border-bottom: 1px solid #2d3348; }
+    .tab-btn { background: none; border: none; color: #64748b; padding: 10px 20px; font-size: 0.85rem; cursor: pointer; border-bottom: 2px solid transparent; transition: all 0.2s; }
+    .tab-btn:hover { color: #94a3b8; }
+    .tab-btn.active { color: #6366f1; border-bottom-color: #6366f1; }
+    .tab-content { display: none; }
+    .tab-content.active { display: block; }
+    .json-view { background: #0f1117; border: 1px solid #2d3348; border-radius: 8px; padding: 16px; font-family: "SF Mono", "Fira Code", monospace; font-size: 0.82rem; line-height: 1.6; color: #94a3b8; overflow-x: auto; white-space: pre-wrap; word-break: break-all; max-height: 500px; overflow-y: auto; }
+</style>
+</head>
+<body>
+
+<header>
+  <h1>📞 Amazon Connect Contact 详情查询</h1>
+  <div class="status-bar">
+    <span><span class="status-dot" id="status-dot"></span><span id="status-text">就绪</span></span>
+  </div>
+</header>
+
+<!-- AWS Credential -->
+<div class="credential-section">
+  <button class="credential-toggle" id="cred-toggle">
+    <span>🔑 AWS Credential 配置</span>
+    <span class="toggle-icon">▼</span>
+  </button>
+  <div class="credential-body" id="cred-body">
+    <div><label>AWS Access Key ID</label><input id="cfg-access-key" type="password" placeholder="AKIA..." /></div>
+    <div><label>AWS Secret Access Key</label><input id="cfg-secret-key" type="password" placeholder="Secret..." /></div>
+    <div><label>Session Token（可选）</label><input id="cfg-session-token" type="password" placeholder="临时凭证 Session Token..." /></div>
+    <div><label>AWS 区域</label><input id="cfg-region" value="us-east-1" placeholder="us-east-1" /></div>
+  </div>
+</div>
+
+<!-- Search Panel -->
+<div class="search-panel">
+  <div><label>Connect 实例 ID</label><input id="cfg-instance-id" placeholder="xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx" /></div>
+  <div><label>Contact ID</label><input id="cfg-contact-id" placeholder="xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx" /></div>
+  <div class="btn-row">
+    <button class="btn btn-primary" id="btn-search">🔍 查询</button>
+    <button class="btn btn-danger" id="btn-clear">清空</button>
+  </div>
+</div>
+
+<!-- Error -->
+<div id="error-container"></div>
+
+<!-- Loading -->
+<div id="loading-container" style="display:none;" class="empty-state">
+  <span class="spinner"></span> 正在查询 Contact 详情...
+</div>
+
+<!-- Empty -->
+<div id="empty-state" class="empty-state">输入 Contact ID 后点击查询，加载联系详情、聊天记录或语音转录</div>
+
+<!-- Results -->
+<div id="results-container" style="display:none;">
+  <div class="detail-panel" id="panel-basic">
+    <div class="panel-header">📋 基本信息</div>
+    <div class="panel-body"><div class="detail-grid" id="basic-grid"></div></div>
+  </div>
+  <div class="detail-panel" id="panel-agent" style="display:none;">
+    <div class="panel-header">👤 坐席信息</div>
+    <div class="panel-body"><div class="detail-grid" id="agent-grid"></div></div>
+  </div>
+  <div class="detail-panel" id="panel-queue" style="display:none;">
+    <div class="panel-header">📥 队列信息</div>
+    <div class="panel-body"><div class="detail-grid" id="queue-grid"></div></div>
+  </div>
+  <div class="detail-panel" id="panel-attributes" style="display:none;">
+    <div class="panel-header">🏷️ Contact Attributes</div>
+    <div class="panel-body"><div class="detail-grid" id="attributes-grid"></div></div>
+  </div>
+  <div class="detail-panel" id="panel-transcript">
+    <div class="tab-bar">
+      <button class="tab-btn active" data-tab="tab-transcript">💬 聊天记录 / 语音转录</button>
+      <button class="tab-btn" data-tab="tab-raw">📄 原始 JSON</button>
+    </div>
+    <div class="tab-content active" id="tab-transcript">
+      <div class="transcript-container" id="transcript-container">
+        <div class="empty-state" style="padding:30px;">暂无记录</div>
+      </div>
+    </div>
+    <div class="tab-content" id="tab-raw">
+      <div class="panel-body"><pre class="json-view" id="raw-json"></pre></div>
+    </div>
+  </div>
+</div>
+
+<script type="module" src="/src/contact-search.js"></script>
+</body>
+</html>
